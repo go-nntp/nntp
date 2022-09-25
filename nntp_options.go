@@ -22,7 +22,7 @@ func GroupRange(firstNum, lastNum int) GroupOption {
 type ArticleOption func(*articleOptions)
 
 type articleOptions struct {
-	messageID     string
+	messageID     MessageID
 	articleNumber int
 }
 
@@ -35,26 +35,26 @@ func ArticleNumber(articleNumber int) ArticleOption {
 
 // The message-id provided can be unwrapped without the "<>" outter pair. The function will rewrap it by calling the
 // FullMessageID() function.
-func MessageID(messageID string) ArticleOption {
+func ArticleMessageID(messageID MessageID) ArticleOption {
 	return func(o *articleOptions) {
-		o.messageID = FullMessageID(messageID)
+		o.messageID = messageID
 	}
 }
 
 type OverOption func(*overOptions)
 
 type overOptions struct {
-	messageID    string
+	messageID    MessageID
 	articleRange *Range
 }
 
-func OverMessageID(messageID string) OverOption {
+func OverMessageID(messageID MessageID) OverOption {
 	return func(o *overOptions) {
 		o.messageID = messageID
 	}
 }
 
-func OverArticleRange(firstNum, lastNum int) OverOption {
+func WithArticleRange(firstNum, lastNum int) OverOption {
 	return func(o *overOptions) {
 		o.articleRange = &Range{firstNum, lastNum}
 	}

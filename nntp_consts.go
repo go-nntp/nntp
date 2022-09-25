@@ -287,6 +287,7 @@ const (
 )
 
 const DefaultArticleDateLayout = "02 Jan 2006 15:04:05 -0700"
+const AlternativeArticleDateLayout = "02 Jan 2006 15:04:05 MST"
 
 type OverviewFieldType int
 

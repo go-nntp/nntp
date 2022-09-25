@@ -12,7 +12,7 @@ type Article struct {
 
 	// The message-id string that globally identifies the article across all groups and all peered NNTP servers. Can be
 	// empty string if the article is used as an argument to posting commands.
-	MessageID string
+	MessageID MessageID
 
 	// The parsed MIME header. Only not nil if the article is returned from ARTICLE or HEAD commands, or used as an
 	// argument to posting commands.

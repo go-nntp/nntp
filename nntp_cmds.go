@@ -1,6 +1,7 @@
 package nntp
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"net/textproto"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"gopkg.in/option.v0"
+	"gopkg.in/rx.v0"
 )
 
 /**
@@ -219,7 +221,7 @@ func (conn *Conn) CmdNext(newsgroup string) (err error) {
 func (conn *Conn) CmdArticle(options ...ArticleOption) (article *Article, err error) {
 	opts := option.New(options)
 	if opts.messageID != "" {
-		err = conn.PrintfLine("ARTICLE %s", opts.messageID)
+		err = conn.PrintfLine("ARTICLE %s", opts.messageID.Full())
 	} else if opts.articleNumber != 0 {
 		err = conn.PrintfLine("ARTICLE %d", opts.articleNumber)
 	} else {
@@ -255,7 +257,7 @@ func (conn *Conn) CmdArticle(options ...ArticleOption) (article *Article, err er
 func (conn *Conn) CmdHead(options ...ArticleOption) (article *Article, err error) {
 	opts := option.New(options)
 	if opts.messageID != "" {
-		err = conn.PrintfLine("HEAD %s", opts.messageID)
+		err = conn.PrintfLine("HEAD %s", opts.messageID.Full())
 	} else {
 		err = conn.PrintfLine("HEAD %d", opts.articleNumber)
 	}
@@ -288,7 +290,7 @@ func (conn *Conn) CmdHead(options ...ArticleOption) (article *Article, err error
 func (conn *Conn) CmdBody(options ...ArticleOption) (article *Article, err error) {
 	opts := option.New(options)
 	if opts.messageID != "" {
-		err = conn.PrintfLine("BODY %s", opts.messageID)
+		err = conn.PrintfLine("BODY %s", opts.messageID.Full())
 	} else if opts.articleNumber != 0 {
 		err = conn.PrintfLine("BODY %d", opts.articleNumber)
 	} else {
@@ -320,7 +322,7 @@ func (conn *Conn) CmdBody(options ...ArticleOption) (article *Article, err error
 func (conn *Conn) CmdStat(options ...ArticleOption) (article *Article, err error) {
 	opts := option.New(options)
 	if opts.messageID != "" {
-		err = conn.PrintfLine("STAT %s", opts.messageID)
+		err = conn.PrintfLine("STAT %s", opts.messageID.Full())
 	} else if opts.articleNumber != 0 {
 		err = conn.PrintfLine("STAT %d", opts.articleNumber)
 	} else {
@@ -366,7 +368,7 @@ func (conn *Conn) CmdPost(article *Article) (err error) {
 		return
 	}
 	if article.MessageID != "" {
-		article.Header.Set("Message-Id", article.MessageID)
+		article.Header.Set("Message-Id", string(article.MessageID.Full()))
 	}
 	for key, values := range article.Header {
 		for _, value := range values {
@@ -421,7 +423,7 @@ func (conn *Conn) CmdIHave(article *Article) (err error) {
 		return
 	}
 	if article.MessageID != "" {
-		article.Header.Set("Message-Id", article.MessageID)
+		article.Header.Set("Message-Id", string(article.MessageID.Full()))
 	}
 	for key, values := range article.Header {
 		for _, value := range values {
@@ -683,121 +685,107 @@ func (conn *Conn) CmdListNewsgroups(wildmat string) (groups []GroupDescriptionLi
 }
 
 // Fetches message header for specified articles.
-func (conn *Conn) CmdOver(options ...OverOption) (articles []ArticleOverview, err error) {
-	opts := option.New(options)
-	if opts.messageID != "" {
-		err = conn.PrintfLine("OVER %s", opts.messageID)
-	} else if opts.articleRange != nil {
-		err = conn.PrintfLine("OVER %s", opts.articleRange.String())
-	} else {
-		err = conn.PrintfLine("OVER")
-	}
-	if err != nil {
-		err = fmt.Errorf("[nntp.CmdOver] failed to send OVER command: %w", err)
-		return
-	}
-	code, msg, err := conn.ReadCodeLine(0)
-	if err != nil {
-		err = fmt.Errorf("[nntp.CmdOver] failed to read OVER response: %w", err)
-		return
-	}
-	switch code {
-	case ResponseCodeOverviewFollows: // 224
-		var lines []string
-		if lines, err = conn.ReadDotLines(); err != nil {
-			err = fmt.Errorf("[nntp.CmdOver] failed to read OVER response body: %w", err)
+func (conn *Conn) CmdOver(options ...OverOption) rx.Observable[*ArticleOverview] {
+	return rx.Func(func(subscriber rx.Writer[*ArticleOverview]) (err error) {
+		opts := option.New(options)
+		if opts.messageID != "" {
+			err = conn.PrintfLine("OVER %s", opts.messageID.Full())
+		} else if opts.articleRange != nil {
+			err = conn.PrintfLine("OVER %s", opts.articleRange.String())
+		} else {
+			err = conn.PrintfLine("OVER")
+		}
+		if err != nil {
+			err = fmt.Errorf("[nntp.CmdOver] failed to send OVER command: %w", err)
 			return
 		}
-		articles = make([]ArticleOverview, len(lines))
-		for i, line := range lines {
-			article := &articles[i]
-			fields := strings.Split(line, "\t")
-			if len(fields) < 8 {
-				err = fmt.Errorf("[nntp.CmdOver] invalid group description line %#v: %w", line, ErrorParsingResponse)
-				return
-			}
-			if article.ArticleNumber, err = strconv.Atoi(fields[0]); err != nil {
-				err = fmt.Errorf("[nntp.CmdOver] failed to parse article number %#v: %w", fields[0], ErrorParsingResponse)
-				return
-			}
-			article.Subject, article.From, article.MessageID, article.References = fields[1], fields[2], fields[4], fields[5]
-			if article.Date, err = time.Parse(DefaultArticleDateLayout, fields[3]); err != nil {
-				err = fmt.Errorf("[nntp.CmdOver] failed to parse article date %#v: %w", fields[3], ErrorParsingResponse)
-				return
-			}
-			if article.Bytes, err = strconv.ParseUint(fields[6], 10, 64); err != nil {
-				err = fmt.Errorf("[nntp.CmdOver] failed to parse article bytes count %#v: %w", fields[6], ErrorParsingResponse)
-				return
-			}
-			if article.Lines, err = strconv.ParseUint(fields[7], 10, 64); err != nil {
-				err = fmt.Errorf("[nntp.CmdOver] failed to parse article lines count %#v: %w", fields[7], ErrorParsingResponse)
-				return
-			}
-			article.ExtraFields = fields[8:]
+		code, msg, err := conn.ReadCodeLine(0)
+		if err != nil {
+			err = fmt.Errorf("[nntp.CmdOver] failed to read OVER response: %w", err)
+			return
 		}
-	default:
-		err = fmt.Errorf("[nntp.CmdOver] unexpected response: %w", &Error{code, msg})
-	}
-	return
+		switch code {
+		case ResponseCodeOverviewFollows: // 224
+			reader := bufio.NewScanner(conn.DotReader())
+			var line string
+			for reader.Scan() {
+				line = reader.Text()
+				article := &ArticleOverview{}
+				fields := strings.Split(line, "\t")
+				if len(fields) < 8 {
+					err = fmt.Errorf("[nntp.CmdOver] invalid group description line %#v: %w", line, ErrorParsingResponse)
+					break
+				}
+				if article.ArticleNumber, err = strconv.Atoi(fields[0]); err != nil {
+					err = fmt.Errorf("[nntp.CmdOver] failed to parse article number %#v: %w", fields[0], ErrorParsingResponse)
+					break
+				}
+				article.Subject, article.From, article.Date, article.MessageID, article.References = fields[1], fields[2], Timestamp(fields[3]), MessageID(fields[4]), fields[5]
+				// bytes and lines are best effort values
+				article.Bytes, _ = strconv.ParseUint(fields[6], 10, 64)
+				article.Lines, _ = strconv.ParseUint(fields[7], 10, 64)
+				article.ExtraFields = fields[8:]
+				if !subscriber.Write(article) {
+					break
+				}
+			}
+		default:
+			err = fmt.Errorf("[nntp.CmdOver] unexpected response: %w", &Error{code, msg})
+		}
+		return
+	})
 }
 
 // Fetches message header for specified articles.
-func (conn *Conn) CmdXOver(options ...OverOption) (articles []ArticleOverview, err error) {
-	opts := option.New(options)
-	if opts.messageID != "" {
-		err = conn.PrintfLine("XOVER %s", opts.messageID)
-	} else if opts.articleRange != nil {
-		err = conn.PrintfLine("XOVER %s", opts.articleRange.String())
-	} else {
-		err = conn.PrintfLine("XOVER")
-	}
-	if err != nil {
-		err = fmt.Errorf("[nntp.CmdXOver] failed to send XOVER command: %w", err)
-		return
-	}
-	code, msg, err := conn.ReadCodeLine(0)
-	if err != nil {
-		err = fmt.Errorf("[nntp.CmdXOver] failed to read XOVER response: %w", err)
-		return
-	}
-	switch code {
-	case ResponseCodeOverviewFollows: // 224
-		var lines []string
-		if lines, err = conn.ReadDotLines(); err != nil {
-			err = fmt.Errorf("[nntp.CmdXOver] failed to read XOVER response body: %w", err)
+func (conn *Conn) CmdXOver(options ...OverOption) rx.Observable[*ArticleOverview] {
+	return rx.Func(func(subscriber rx.Writer[*ArticleOverview]) (err error) {
+		opts := option.New(options)
+		if opts.messageID != "" {
+			err = conn.PrintfLine("XOVER %s", opts.messageID.Full())
+		} else if opts.articleRange != nil {
+			err = conn.PrintfLine("XOVER %s", opts.articleRange.String())
+		} else {
+			err = conn.PrintfLine("XOVER")
+		}
+		if err != nil {
+			err = fmt.Errorf("[nntp.CmdXOver] failed to send XOVER command: %w", err)
 			return
 		}
-		articles = make([]ArticleOverview, len(lines))
-		for i, line := range lines {
-			article := &articles[i]
-			fields := strings.Split(line, "\t")
-			if len(fields) < 8 {
-				err = fmt.Errorf("[nntp.CmdXOver] invalid group description line %#v: %w", line, ErrorParsingResponse)
-				return
-			}
-			if article.ArticleNumber, err = strconv.Atoi(fields[0]); err != nil {
-				err = fmt.Errorf("[nntp.CmdXOver] failed to parse article number %#v: %w", fields[0], ErrorParsingResponse)
-				return
-			}
-			article.Subject, article.From, article.MessageID, article.References = fields[1], fields[2], fields[4], fields[5]
-			if article.Date, err = time.Parse(DefaultArticleDateLayout, fields[3]); err != nil {
-				err = fmt.Errorf("[nntp.CmdXOver] failed to parse article date %#v: %w", fields[3], ErrorParsingResponse)
-				return
-			}
-			if article.Bytes, err = strconv.ParseUint(fields[6], 10, 64); err != nil {
-				err = fmt.Errorf("[nntp.CmdXOver] failed to parse article bytes count %#v: %w", fields[6], ErrorParsingResponse)
-				return
-			}
-			if article.Lines, err = strconv.ParseUint(fields[7], 10, 64); err != nil {
-				err = fmt.Errorf("[nntp.CmdXOver] failed to parse article lines count %#v: %w", fields[7], ErrorParsingResponse)
-				return
-			}
-			article.ExtraFields = fields[8:]
+		code, msg, err := conn.ReadCodeLine(0)
+		if err != nil {
+			err = fmt.Errorf("[nntp.CmdXOver] failed to read XOVER response: %w", err)
+			return
 		}
-	default:
-		err = fmt.Errorf("[nntp.CmdXOver] unexpected response: %w", &Error{code, msg})
-	}
-	return
+		switch code {
+		case ResponseCodeOverviewFollows: // 224
+			reader := bufio.NewScanner(conn.DotReader())
+			var line string
+			for reader.Scan() {
+				line = reader.Text()
+				article := &ArticleOverview{}
+				fields := strings.Split(line, "\t")
+				if len(fields) < 8 {
+					err = fmt.Errorf("[nntp.CmdXOver] invalid group description line %#v: %w", line, ErrorParsingResponse)
+					return
+				}
+				if article.ArticleNumber, err = strconv.Atoi(fields[0]); err != nil {
+					err = fmt.Errorf("[nntp.CmdXOver] failed to parse article number %#v: %w", fields[0], ErrorParsingResponse)
+					return
+				}
+				article.Subject, article.From, article.Date, article.MessageID, article.References = fields[1], fields[2], Timestamp(fields[3]), MessageID(fields[4]), fields[5]
+				// bytes and lines are best effort values
+				article.Bytes, _ = strconv.ParseUint(fields[6], 10, 64)
+				article.Lines, _ = strconv.ParseUint(fields[7], 10, 64)
+				article.ExtraFields = fields[8:]
+				if !subscriber.Write(article) {
+					break
+				}
+			}
+		default:
+			err = fmt.Errorf("[nntp.CmdXOver] unexpected response: %w", &Error{code, msg})
+		}
+		return
+	})
 }
 
 // Fetches description of the fields returned in OVER or XOVER command.

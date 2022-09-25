@@ -3,9 +3,7 @@ package nntp
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"net"
-	"net/textproto"
 )
 
 type Dialer struct {
@@ -26,10 +24,8 @@ func (d *Dialer) Dial(ctx context.Context, network, addr string) (conn *Conn, er
 	if err != nil {
 		return
 	}
-	c := &Conn{
-		Conn: textproto.NewConn(netconn),
-	}
-	if err = c.readWelcome(); err != nil {
+	c := NewConn(netconn)
+	if err = c.ReadWelcome(); err != nil {
 		c.Close()
 	}
 	conn = c
@@ -45,27 +41,10 @@ func (d *Dialer) DialTLS(ctx context.Context, network, addr string) (conn *Conn,
 	if err != nil {
 		return
 	}
-	c := &Conn{
-		Conn: textproto.NewConn(netconn),
-	}
-	if err = c.readWelcome(); err != nil {
+	c := NewConn(netconn)
+	if err = c.ReadWelcome(); err != nil {
 		c.Close()
 	}
 	conn = c
-	return
-}
-
-func (conn *Conn) readWelcome() (err error) {
-	code, msg, err := conn.ReadCodeLine(0)
-	if err != nil {
-		err = fmt.Errorf("[nntp.readWelcome] failed to read Welcome message: %w", err)
-		return
-	}
-	switch code {
-	case ResponseCodeReadyPostingAllowed, ResponseCodeReadyPostingProhibited: // 200 || 201
-		err = nil
-	default:
-		err = fmt.Errorf("[nntp.readWelcome] unexpected response: %w", &Error{code, msg})
-	}
 	return
 }
