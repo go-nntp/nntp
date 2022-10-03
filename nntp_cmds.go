@@ -2,6 +2,7 @@ package nntp
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"net/textproto"
@@ -312,11 +313,68 @@ func (conn *Conn) CmdBody(options ...ArticleOption) (article *Article, err error
 			err = fmt.Errorf("[nntp.CmdBody] failed to parse BODY command status line: %#v: %w", msg, ErrorParsingResponse)
 			return
 		}
-		article.Body = conn.DotReader()
+		if opts.rawBody {
+			article.Body = &rawDotReader{r: &conn.Reader}
+		} else {
+			article.Body = conn.DotReader()
+		}
 	default:
 		err = fmt.Errorf("[nntp.CmdBody] unexpected response: %w", &Error{code, msg})
 	}
 	return
+}
+
+func (conn *Conn) CmdStreamBody(messageIDStream rx.Observable[MessageID]) rx.Observable[*Article] {
+	return rx.Func(func(subscriber rx.Writer[*Article]) (err error) {
+		idWriter, idReader := rx.Pipe[MessageID](subscriber)
+		subscriber.Go(func() (err error) {
+			for {
+				if id, ok := idReader.Read(); ok {
+					if err = conn.PrintfLine("BODY %s", id.Full()); err != nil {
+						err = fmt.Errorf("[nntp.CmdStreamBody] failed to send BODY command: %w", err)
+						return
+					}
+				} else {
+					return
+				}
+			}
+		})
+		subscriber.Go(func() (err error) {
+			var (
+				code    int
+				msg     string
+				article *Article
+				body    []byte
+			)
+			for {
+				if code, msg, err = conn.ReadCodeLine(0); err != nil {
+					err = fmt.Errorf("[nntp.CmdStreamBody] failed to read BODY response: %w", err)
+					return
+				}
+				switch code {
+				case ResponseCodeBodyFollows: // 222
+					article = new(Article)
+					if _, err = fmt.Sscanf(msg, "%d %s", &article.ArticleNumber, &article.MessageID); err != nil {
+						err = fmt.Errorf("[nntp.CmdStreamBody] failed to parse BODY command status line: %#v: %w", msg, ErrorParsingResponse)
+						return
+					}
+					if body, err = io.ReadAll(conn.DotReader()); err != nil {
+						err = fmt.Errorf("[nntp.CmdStreamBody] failed to read BODY payload: %w", ErrorParsingResponse)
+						return
+					}
+					article.Body = bytes.NewReader(body)
+					if !subscriber.Write(article) {
+						return
+					}
+				default:
+					err = fmt.Errorf("[nntp.CmdStreamBody] unexpected response: %w", &Error{code, msg})
+					return
+				}
+			}
+		})
+		messageIDStream.Subscribe(idWriter)
+		return
+	})
 }
 
 func (conn *Conn) CmdStat(options ...ArticleOption) (article *Article, err error) {

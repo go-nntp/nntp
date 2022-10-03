@@ -24,6 +24,7 @@ type ArticleOption func(*articleOptions)
 type articleOptions struct {
 	messageID     MessageID
 	articleNumber int
+	rawBody       bool
 }
 
 // Article number in a newsgroup. The lowest article number is 1. Number 0 is only used for special meanings.
@@ -38,6 +39,13 @@ func ArticleNumber(articleNumber int) ArticleOption {
 func ArticleMessageID(messageID MessageID) ArticleOption {
 	return func(o *articleOptions) {
 		o.messageID = messageID
+	}
+}
+
+// Stream raw article body without dot decoding.
+func WithRawBody() ArticleOption {
+	return func(o *articleOptions) {
+		o.rawBody = true
 	}
 }
 
