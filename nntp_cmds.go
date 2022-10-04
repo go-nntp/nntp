@@ -29,14 +29,14 @@ func (conn *Conn) CmdCapabilities() (capabilities []string, err error) {
 		err = fmt.Errorf("[nntp.CmdCapabilities] failed to read CAPABILITIES response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeCapabilitiesFollow: // 101
 		if capabilities, err = conn.ReadDotLines(); err != nil {
 			err = fmt.Errorf("[nntp.CmdCapabilities] failed to read CAPABILITIES response body: %w", err)
 			return
 		}
 	default:
-		err = fmt.Errorf("[nntp.CmdCapabilities] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdCapabilities] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -56,13 +56,13 @@ func (conn *Conn) CmdModeReader() (postingAllowed bool, err error) {
 		err = fmt.Errorf("[nntp.CmdModeReader] failed to read MODE READER response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeReadyPostingAllowed: // 200
 		postingAllowed = true
 	case ResponseCodeReadyPostingProhibited: // 201
 		postingAllowed = false
 	default:
-		err = fmt.Errorf("[nntp.CmdModeReader] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdModeReader] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -80,14 +80,14 @@ func (conn *Conn) CmdQuit() (err error) {
 		err = fmt.Errorf("[nntp.CmdQuit] failed to read QUIT response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeDisconnectingRequested: // 205
 		if err = conn.Close(); err != nil {
 			err = fmt.Errorf("[nntp.CmdQuit] failed to close connection: %w", err)
 			return
 		}
 	default:
-		err = fmt.Errorf("[nntp.CmdQuit] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdQuit] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -109,7 +109,7 @@ func (conn *Conn) CmdGroup(newsgroup string) (groupinfo *GroupStat, err error) {
 		err = fmt.Errorf("[nntp.CmdGroup] failed to read GROUP response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeGroupSelected: // 211
 		info := &GroupStat{}
 		if _, err = fmt.Sscanf(msg, "%d %d %d %s", &info.Count, &info.First, &info.Last, &info.Group); err != nil {
@@ -118,7 +118,7 @@ func (conn *Conn) CmdGroup(newsgroup string) (groupinfo *GroupStat, err error) {
 		}
 		groupinfo = info
 	default:
-		err = fmt.Errorf("[nntp.CmdGroup] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdGroup] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -148,7 +148,7 @@ func (conn *Conn) CmdListGroup(options ...GroupOption) (groupinfo *GroupStat, ar
 		err = fmt.Errorf("[nntp.CmdListGroup] failed to read LISTGROUP response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeGroupSelected: // 211
 		info := &GroupStat{}
 		if _, err = fmt.Sscanf(msg, "%d %d %d %s", &info.Count, &info.First, &info.Last, &info.Group); err != nil {
@@ -169,7 +169,7 @@ func (conn *Conn) CmdListGroup(options ...GroupOption) (groupinfo *GroupStat, ar
 		}
 		groupinfo, articles = info, ids
 	default:
-		err = fmt.Errorf("[nntp.CmdListGroup] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdListGroup] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -188,10 +188,10 @@ func (conn *Conn) CmdLast(newsgroup string) (err error) {
 		err = fmt.Errorf("[nntp.CmdLast] failed to read LAST response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeArticleSelected: // 223
 	default:
-		err = fmt.Errorf("[nntp.CmdLast] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdLast] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -210,10 +210,10 @@ func (conn *Conn) CmdNext(newsgroup string) (err error) {
 		err = fmt.Errorf("[nntp.CmdNext] failed to read NEXT response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeArticleSelected: // 223
 	default:
-		err = fmt.Errorf("[nntp.CmdNext] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdNext] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -237,7 +237,7 @@ func (conn *Conn) CmdArticle(options ...ArticleOption) (article *Article, err er
 		err = fmt.Errorf("[nntp.CmdArticle] failed to read ARTICLE response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeArticleFollows: // 220
 		article = new(Article)
 		if _, err = fmt.Sscanf(msg, "%d %s", &article.ArticleNumber, &article.MessageID); err != nil {
@@ -250,7 +250,7 @@ func (conn *Conn) CmdArticle(options ...ArticleOption) (article *Article, err er
 		}
 		article.Body = conn.DotReader()
 	default:
-		err = fmt.Errorf("[nntp.CmdArticle] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdArticle] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -271,7 +271,7 @@ func (conn *Conn) CmdHead(options ...ArticleOption) (article *Article, err error
 		err = fmt.Errorf("[nntp.CmdHead] failed to read HEAD response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeHeadFollows: // 221
 		article = new(Article)
 		if _, err = fmt.Sscanf(msg, "%d %s", &article.ArticleNumber, &article.MessageID); err != nil {
@@ -283,7 +283,7 @@ func (conn *Conn) CmdHead(options ...ArticleOption) (article *Article, err error
 			return
 		}
 	default:
-		err = fmt.Errorf("[nntp.CmdHead] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdHead] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -306,7 +306,7 @@ func (conn *Conn) CmdBody(options ...ArticleOption) (article *Article, err error
 		err = fmt.Errorf("[nntp.CmdBody] failed to read BODY response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeBodyFollows: // 222
 		article = new(Article)
 		if _, err = fmt.Sscanf(msg, "%d %s", &article.ArticleNumber, &article.MessageID); err != nil {
@@ -319,7 +319,7 @@ func (conn *Conn) CmdBody(options ...ArticleOption) (article *Article, err error
 			article.Body = conn.DotReader()
 		}
 	default:
-		err = fmt.Errorf("[nntp.CmdBody] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdBody] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -351,7 +351,7 @@ func (conn *Conn) CmdStreamBody(messageIDStream rx.Observable[MessageID]) rx.Obs
 					err = fmt.Errorf("[nntp.CmdStreamBody] failed to read BODY response: %w", err)
 					return
 				}
-				switch code {
+				switch ResponseCode(code) {
 				case ResponseCodeBodyFollows: // 222
 					article = new(Article)
 					if _, err = fmt.Sscanf(msg, "%d %s", &article.ArticleNumber, &article.MessageID); err != nil {
@@ -367,7 +367,7 @@ func (conn *Conn) CmdStreamBody(messageIDStream rx.Observable[MessageID]) rx.Obs
 						return
 					}
 				default:
-					err = fmt.Errorf("[nntp.CmdStreamBody] unexpected response: %w", &Error{code, msg})
+					err = fmt.Errorf("[nntp.CmdStreamBody] unexpected response: %w", &Error{ResponseCode(code), msg})
 					return
 				}
 			}
@@ -395,7 +395,7 @@ func (conn *Conn) CmdStat(options ...ArticleOption) (article *Article, err error
 		err = fmt.Errorf("[nntp.CmdStat] failed to read STAT response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeArticleSelected: // 223
 		article = new(Article)
 		if _, err = fmt.Sscanf(msg, "%d %s", &article.ArticleNumber, &article.MessageID); err != nil {
@@ -403,7 +403,7 @@ func (conn *Conn) CmdStat(options ...ArticleOption) (article *Article, err error
 			return
 		}
 	default:
-		err = fmt.Errorf("[nntp.CmdStat] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdStat] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -418,11 +418,11 @@ func (conn *Conn) CmdPost(article *Article) (err error) {
 		err = fmt.Errorf("[nntp.CmdPost] failed to read POST response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodePostingSend: // 340
 		err = nil
 	default:
-		err = fmt.Errorf("[nntp.CmdPost] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdPost] unexpected response: %w", &Error{ResponseCode(code), msg})
 		return
 	}
 	if article.MessageID != "" {
@@ -454,11 +454,11 @@ func (conn *Conn) CmdPost(article *Article) (err error) {
 		err = fmt.Errorf("[nntp.CmdPost] failed to read POST result: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodePostingSuccess: // 240
 		err = nil
 	default:
-		err = fmt.Errorf("[nntp.CmdPost] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdPost] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -473,11 +473,11 @@ func (conn *Conn) CmdIHave(article *Article) (err error) {
 		err = fmt.Errorf("[nntp.CmdIHave] failed to read IHAVE response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeTransferSend: // 335
 		err = nil
 	default:
-		err = fmt.Errorf("[nntp.CmdIHave] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdIHave] unexpected response: %w", &Error{ResponseCode(code), msg})
 		return
 	}
 	if article.MessageID != "" {
@@ -509,11 +509,11 @@ func (conn *Conn) CmdIHave(article *Article) (err error) {
 		err = fmt.Errorf("[nntp.CmdIHave] failed to read IHAVE result: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodePostingSuccess: // 240
 		err = nil
 	default:
-		err = fmt.Errorf("[nntp.CmdIHave] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdIHave] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -529,14 +529,14 @@ func (conn *Conn) CmdDate() (date time.Time, err error) {
 		err = fmt.Errorf("[nntp.CmdDate] failed to read DATE response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeServerDate: // 223
 		if date, err = time.Parse("20060102150405", msg); err != nil {
 			err = fmt.Errorf("[nntp.CmdDate] failed to parse date string %#v: %w", msg, err)
 			return
 		}
 	default:
-		err = fmt.Errorf("[nntp.CmdDate] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdDate] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -552,11 +552,11 @@ func (conn *Conn) CmdHelp() (help io.Reader, err error) {
 		err = fmt.Errorf("[nntp.CmdHelp] failed to read HELP response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeHelpFollows: // 100
 		help = conn.DotReader()
 	default:
-		err = fmt.Errorf("[nntp.CmdHelp] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdHelp] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -578,7 +578,7 @@ func (conn *Conn) CmdNewGroups(date time.Time, useGMT bool) (groups []GroupListI
 		err = fmt.Errorf("[nntp.CmdNewGroups] failed to read NEWGROUPS response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeNewGroupsFollow: // 231
 		var lines []string
 		if lines, err = conn.ReadDotLines(); err != nil {
@@ -594,7 +594,7 @@ func (conn *Conn) CmdNewGroups(date time.Time, useGMT bool) (groups []GroupListI
 			}
 		}
 	default:
-		err = fmt.Errorf("[nntp.CmdNewGroups] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdNewGroups] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -621,14 +621,14 @@ func (conn *Conn) CmdNewNews(wildmat string, date time.Time, useGMT bool) (messa
 		err = fmt.Errorf("[nntp.CmdNewNews] failed to read NEWNEWS response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeNewArticlesFollow: // 230
 		if messageIds, err = conn.ReadDotLines(); err != nil {
 			err = fmt.Errorf("[nntp.CmdNewNews] failed to read NEWNEWS response body: %w", err)
 			return
 		}
 	default:
-		err = fmt.Errorf("[nntp.CmdNewNews] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdNewNews] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -644,7 +644,7 @@ func (conn *Conn) CmdList() (groups []GroupListItem, err error) {
 		err = fmt.Errorf("[nntp.CmdList] failed to read LIST response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeGroupsFollow: // 215
 		var lines []string
 		if lines, err = conn.ReadDotLines(); err != nil {
@@ -660,7 +660,7 @@ func (conn *Conn) CmdList() (groups []GroupListItem, err error) {
 			}
 		}
 	default:
-		err = fmt.Errorf("[nntp.CmdList] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdList] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -681,7 +681,7 @@ func (conn *Conn) CmdListActive(wildmat string) (groups []GroupListItem, err err
 		err = fmt.Errorf("[nntp.CmdListActive] failed to read LIST ACTIVE response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeGroupsFollow: // 215
 		var lines []string
 		if lines, err = conn.ReadDotLines(); err != nil {
@@ -697,7 +697,7 @@ func (conn *Conn) CmdListActive(wildmat string) (groups []GroupListItem, err err
 			}
 		}
 	default:
-		err = fmt.Errorf("[nntp.CmdListActive] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdListActive] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -718,7 +718,7 @@ func (conn *Conn) CmdListNewsgroups(wildmat string) (groups []GroupDescriptionLi
 		err = fmt.Errorf("[nntp.CmdListNewsgroups] failed to read LIST NEWSGROUPS response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeGroupsFollow: // 215
 		var lines []string
 		if lines, err = conn.ReadDotLines(); err != nil {
@@ -737,7 +737,7 @@ func (conn *Conn) CmdListNewsgroups(wildmat string) (groups []GroupDescriptionLi
 			group.Description = strings.Join(fields[1:], " ")
 		}
 	default:
-		err = fmt.Errorf("[nntp.CmdListNewsgroups] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdListNewsgroups] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -762,7 +762,7 @@ func (conn *Conn) CmdOver(options ...OverOption) rx.Observable[*ArticleOverview]
 			err = fmt.Errorf("[nntp.CmdOver] failed to read OVER response: %w", err)
 			return
 		}
-		switch code {
+		switch ResponseCode(code) {
 		case ResponseCodeOverviewFollows: // 224
 			reader := bufio.NewScanner(conn.DotReader())
 			var line string
@@ -788,7 +788,7 @@ func (conn *Conn) CmdOver(options ...OverOption) rx.Observable[*ArticleOverview]
 				}
 			}
 		default:
-			err = fmt.Errorf("[nntp.CmdOver] unexpected response: %w", &Error{code, msg})
+			err = fmt.Errorf("[nntp.CmdOver] unexpected response: %w", &Error{ResponseCode(code), msg})
 		}
 		return
 	})
@@ -814,7 +814,7 @@ func (conn *Conn) CmdXOver(options ...OverOption) rx.Observable[*ArticleOverview
 			err = fmt.Errorf("[nntp.CmdXOver] failed to read XOVER response: %w", err)
 			return
 		}
-		switch code {
+		switch ResponseCode(code) {
 		case ResponseCodeOverviewFollows: // 224
 			reader := bufio.NewScanner(conn.DotReader())
 			var line string
@@ -840,7 +840,7 @@ func (conn *Conn) CmdXOver(options ...OverOption) rx.Observable[*ArticleOverview
 				}
 			}
 		default:
-			err = fmt.Errorf("[nntp.CmdXOver] unexpected response: %w", &Error{code, msg})
+			err = fmt.Errorf("[nntp.CmdXOver] unexpected response: %w", &Error{ResponseCode(code), msg})
 		}
 		return
 	})
@@ -857,7 +857,7 @@ func (conn *Conn) CmdListOverviewFmt() (fields []OverviewFieldFormat, err error)
 		err = fmt.Errorf("[nntp.CmdListOverviewFmt] failed to read LIST OVERVIEW.FMT response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeInformationFollows: // 215
 		var lines []string
 		if lines, err = conn.ReadDotLines(); err != nil {
@@ -910,7 +910,7 @@ func (conn *Conn) CmdListOverviewFmt() (fields []OverviewFieldFormat, err error)
 			}
 		}
 	default:
-		err = fmt.Errorf("[nntp.CmdListOverviewFmt] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdListOverviewFmt] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -926,7 +926,7 @@ func (conn *Conn) CmdListHeaders() (anyField bool, fields []string, err error) {
 		err = fmt.Errorf("[nntp.CmdListHeaders] failed to read LIST HEADERS response: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeInformationFollows: // 215
 		var lines []string
 		if lines, err = conn.ReadDotLines(); err != nil {
@@ -942,7 +942,7 @@ func (conn *Conn) CmdListHeaders() (anyField bool, fields []string, err error) {
 			}
 		}
 	default:
-		err = fmt.Errorf("[nntp.CmdListHeaders] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdListHeaders] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
@@ -969,7 +969,7 @@ func (conn *Conn) CmdAuthinfo(user, pass string) (err error) {
 		err = fmt.Errorf("[nntp.CmdAuthinfo] failed to read AUTHINFO user response: %w", err)
 		return
 	}
-	if code == ResponseCodeAuthenticationContinue /* 381 */ {
+	if ResponseCode(code) == ResponseCodeAuthenticationContinue /* 381 */ {
 		if pass == "" {
 			err = fmt.Errorf("[nntp.CmdAuthinfo] empty password: %w", ErrorInvalidParams)
 			return
@@ -983,15 +983,15 @@ func (conn *Conn) CmdAuthinfo(user, pass string) (err error) {
 			return
 		}
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeAuthenticationAccepted: // 281
 		err = nil
 	case ResponseCodeAuthenticationContinue: // 381
-		err = fmt.Errorf("[nntp.CmdAuthinfo] authentication uncompleted: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdAuthinfo] authentication uncompleted: %w", &Error{ResponseCode(code), msg})
 	case ResponseCodeAuthenticationRejected, ResponseCodeNotPermitted: // 482 || 502
-		err = fmt.Errorf("[nntp.CmdAuthinfo] authentication rejected: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdAuthinfo] authentication rejected: %w", &Error{ResponseCode(code), msg})
 	default:
-		err = fmt.Errorf("[nntp.CmdAuthinfo] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.CmdAuthinfo] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }

@@ -6,12 +6,16 @@ import (
 )
 
 type Error struct {
-	Code    int
+	Code    ResponseCode
 	Message string
 }
 
 func (err Error) Error() string {
 	return fmt.Sprintf("NNTP Response Code: %d, %s", err.Code, err.Message)
+}
+
+func (err Error) Unwrap() error {
+	return err.Code
 }
 
 var ErrorInvalidParams = errors.New("invalid parameters")

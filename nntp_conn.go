@@ -24,11 +24,11 @@ func (conn *Conn) ReadWelcome() (err error) {
 		err = fmt.Errorf("[nntp.readWelcome] failed to read Welcome message: %w", err)
 		return
 	}
-	switch code {
+	switch ResponseCode(code) {
 	case ResponseCodeReadyPostingAllowed, ResponseCodeReadyPostingProhibited: // 200 || 201
 		err = nil
 	default:
-		err = fmt.Errorf("[nntp.readWelcome] unexpected response: %w", &Error{code, msg})
+		err = fmt.Errorf("[nntp.readWelcome] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
 	return
 }
