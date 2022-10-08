@@ -2,7 +2,8 @@ package nntp
 
 import (
 	"io"
-	"net/textproto"
+
+	"gopkg.in/textproto.v0"
 )
 
 type Article struct {

@@ -3,7 +3,8 @@ package nntp
 import (
 	"fmt"
 	"io"
-	"net/textproto"
+
+	"gopkg.in/textproto.v0"
 )
 
 type Conn struct {

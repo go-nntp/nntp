@@ -5,13 +5,13 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"net/textproto"
 	"strconv"
 	"strings"
 	"time"
 
 	"gopkg.in/option.v0"
 	"gopkg.in/rx.v0"
+	"gopkg.in/textproto.v0"
 )
 
 /**
@@ -248,7 +248,11 @@ func (conn *Conn) CmdArticle(options ...ArticleOption) (article *Article, err er
 			err = fmt.Errorf("[nntp.CmdArticle] failed to parse MIME header: %#v: %w", msg, ErrorParsingResponse)
 			return
 		}
-		article.Body = conn.DotReader()
+		if opts.dotEncodedBody {
+			article.Body = conn.DotReader(textproto.DisableDotDecoding)
+		} else {
+			article.Body = conn.DotReader()
+		}
 	default:
 		err = fmt.Errorf("[nntp.CmdArticle] unexpected response: %w", &Error{ResponseCode(code), msg})
 	}
@@ -313,8 +317,8 @@ func (conn *Conn) CmdBody(options ...ArticleOption) (article *Article, err error
 			err = fmt.Errorf("[nntp.CmdBody] failed to parse BODY command status line: %#v: %w", msg, ErrorParsingResponse)
 			return
 		}
-		if opts.rawBody {
-			article.Body = &rawDotReader{r: &conn.Reader}
+		if opts.dotEncodedBody {
+			article.Body = conn.DotReader(textproto.DisableDotDecoding)
 		} else {
 			article.Body = conn.DotReader()
 		}
@@ -408,7 +412,8 @@ func (conn *Conn) CmdStat(options ...ArticleOption) (article *Article, err error
 	return
 }
 
-func (conn *Conn) CmdPost(article *Article) (err error) {
+func (conn *Conn) CmdPost(article *Article, options ...ArticleOption) (err error) {
+	opts := option.New(options)
 	if err = conn.PrintfLine("POST"); err != nil {
 		err = fmt.Errorf("[nntp.CmdPost] failed to send POST command: %w", err)
 		return
@@ -440,7 +445,12 @@ func (conn *Conn) CmdPost(article *Article) (err error) {
 		err = fmt.Errorf("[nntp.CmdPost] failed to send article header termination line: %w", err)
 		return
 	}
-	writer := conn.DotWriter()
+	var writer io.WriteCloser
+	if opts.dotEncodedBody {
+		writer = conn.DotWriter(textproto.DisableDotEncoding)
+	} else {
+		writer = conn.DotWriter()
+	}
 	if _, err = io.Copy(writer, article.Body); err != nil {
 		err = fmt.Errorf("[nntp.CmdPost] failed to send article body: %w", err)
 		return

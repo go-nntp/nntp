@@ -22,9 +22,9 @@ func GroupRange(firstNum, lastNum int) GroupOption {
 type ArticleOption func(*articleOptions)
 
 type articleOptions struct {
-	messageID     MessageID
-	articleNumber int
-	rawBody       bool
+	messageID      MessageID
+	articleNumber  int
+	dotEncodedBody bool
 }
 
 // Article number in a newsgroup. The lowest article number is 1. Number 0 is only used for special meanings.
@@ -43,9 +43,9 @@ func ArticleMessageID(messageID MessageID) ArticleOption {
 }
 
 // Stream raw article body without dot decoding.
-func WithRawBody() ArticleOption {
+func WithDotEncodedBody() ArticleOption {
 	return func(o *articleOptions) {
-		o.rawBody = true
+		o.dotEncodedBody = true
 	}
 }
 
